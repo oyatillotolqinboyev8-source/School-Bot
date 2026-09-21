@@ -2,7 +2,9 @@ import asyncio
 import logging
 import os
 import sqlite3
+import threading
 from datetime import datetime, timedelta
+from flask import Flask
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
@@ -18,16 +20,31 @@ from dotenv import load_dotenv
 # .env faylidan tokenlarni yuklaymiz
 load_dotenv()
 
-# ==================== AYARLAR ====================
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8852646365:AAEZAC4ol_546yaDRICSJQ_NN4EaAz50KY0")
+# ==================== RENDER PORT SERVER (FLASK) ====================
+# Render Web Service portni topishi va Timed Out bermasligi uchun
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "School Bot is running 24/7!"
+
+def run_flask():
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port)
+
+# Flask serverini orqa fonda (thread) ishga tushiramiz
+threading.Thread(target=run_flask, daemon=True).start()
+
+
+# ==================== SOZLAMALAR ====================
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "7214612272"))
 
-# Bot Nesnesi
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
 
-# ==================== VERİTABANI ====================
+# ==================== MA'LUMOTLAR BAZASI ====================
 def init_db():
     conn = sqlite3.connect("school.db")
     cursor = conn.cursor()
@@ -155,7 +172,7 @@ def get_all_books():
     return data
 
 
-# ==================== MENÜ BUTONLARI ====================
+# ==================== TUGMALAR (KEYBOARDS) ====================
 
 main_menu = ReplyKeyboardMarkup(
     keyboard=[
@@ -174,7 +191,7 @@ main_menu = ReplyKeyboardMarkup(
 admin_inline_menu = InlineKeyboardMarkup(
     inline_keyboard=[
         [
-            InlineKeyboardButton(text="📊 Statistika (Foydalanuvchilar)", callback_data="admin_stats"),
+            InlineKeyboardButton(text="📊 Statistika", callback_data="admin_stats"),
             InlineKeyboardButton(text="📢 Xabar Yuborish", callback_data="admin_broadcast")
         ],
         [
@@ -244,7 +261,7 @@ back_to_clubs_menu = InlineKeyboardMarkup(
 )
 
 
-# ==================== FSM DURUMLARI ====================
+# ==================== FSM HOLATLARI ====================
 class HomeworkState(StatesGroup):
     subject = State()
     group = State()
@@ -259,7 +276,7 @@ class BroadcastState(StatesGroup):
     message = State()
 
 
-# ==================== PROGRAM VERİLERİ ====================
+# ==================== JADVAL MA'LUMOTLARI ====================
 SCHEDULES = {
     "day_dushanba": (
         "<b>📌 DUSHANBA DARS JADVALI:</b>\n"
@@ -429,8 +446,7 @@ async def process_broadcast_message(message: types.Message, state: FSMContext):
     await message.answer(f"✅ Xabar <b>{count} ta</b> foydalanuvchiga muvaffaqiyatli yuborildi!", parse_mode="HTML")
     await state.clear()
 
-
-# Admin: Ödev Ekleme
+# Admin: Vazifa qo'shish
 @dp.callback_query(F.data == "admin_add_hw")
 async def process_admin_add_hw(callback: types.CallbackQuery, state: FSMContext):
     if callback.from_user.id != ADMIN_ID:
@@ -499,8 +515,7 @@ async def process_hw_photo(message: types.Message, state: FSMContext):
     await message.answer("✅ Uyga vazifa muvaffaqiyatli saqlandi va e'lon qilindi!")
     await state.clear()
 
-
-# Admin: Ödev Silme
+# Admin: Vazifa o'chirish
 @dp.callback_query(F.data == "admin_delete_hw")
 async def process_admin_delete_hw(callback: types.CallbackQuery):
     if callback.from_user.id != ADMIN_ID:
@@ -539,8 +554,7 @@ async def process_confirm_delete_hw(callback: types.CallbackQuery):
     await callback.message.answer("✅ Vazifa bazadan muvaffaqiyatli o'chirildi!")
     await callback.answer()
 
-
-# ==================== 📝 ÖDEVLERİ GÖRÜNTÜLEME ====================
+# Uyga vazifalarni ko'rish
 @dp.message(F.text.contains("Uyga vazifalar"))
 async def homework_view_handler(message: types.Message):
     tasks = get_latest_homework()
@@ -559,8 +573,7 @@ async def homework_view_handler(message: types.Message):
         else:
             await message.answer(text=caption_text, parse_mode="HTML")
 
-
-# ==================== 📅 DERS PROGRAMI ====================
+# Dars jadvali
 @dp.message(F.text.contains("Dars jadvali"))
 async def schedule_menu_handler(message: types.Message):
     await message.answer(
@@ -592,8 +605,7 @@ async def process_back_callback(callback: types.CallbackQuery):
     )
     await callback.answer()
 
-
-# ==================== 🎨 KULÜP PROGRAMI ====================
+# To'garaklar jadvali
 @dp.message(F.text.contains("To'garak"))
 async def clubs_menu_handler(message: types.Message):
     await message.answer(
@@ -625,8 +637,7 @@ async def process_back_clubs_callback(callback: types.CallbackQuery):
     )
     await callback.answer()
 
-
-# ==================== 📚 KİTAPLAR ====================
+# Kitoblar
 @dp.message(F.text.contains("Kitoblar"))
 async def books_handler(message: types.Message):
     books = get_all_books()
@@ -665,7 +676,7 @@ async def process_book_file(message: types.Message, state: FSMContext):
     await state.clear()
 
 
-# ==================== BOTU BAŞLATMA ====================
+# ==================== BOTNI ISHGA TUSHIRISH ====================
 async def main():
     logging.basicConfig(level=logging.INFO)
     init_db()
