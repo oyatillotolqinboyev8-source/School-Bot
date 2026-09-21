@@ -19,7 +19,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ==================== AYARLAR ====================
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8852646365:AAEZAC4ol_546yaDRICSJQ_NN4EaAz50KY0")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "7214612272"))
 
 # Bot Nesnesi
